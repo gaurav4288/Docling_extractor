@@ -2,6 +2,7 @@
 fastapi[standard]
 uvicorn[standard]
 python-multipart
+gunicorn
 
 # Image / OCR / PDF processing
 easyocr
