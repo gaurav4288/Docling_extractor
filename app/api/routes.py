@@ -4,9 +4,6 @@ from pathlib import Path
 from io import BytesIO
 import logging
 
-from app.services.marker import MarkerProcessor
-from app.services.pdfplumber import FormProcessor
-from app.services.docling import DoclingService
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +29,9 @@ async def convert(
     service: one of ['marker', 'pdfplumber', 'docling']
     """
     # Save uploaded file to disk
+    from app.services.marker import MarkerProcessor
+    from app.services.pdfplumber import FormProcessor
+    from app.services.docling import DoclingService
     input_path = TEMP_DIR / file.filename
     with input_path.open("wb") as buffer:
         buffer.write(await file.read())
