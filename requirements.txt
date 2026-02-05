@@ -3,3 +3,4 @@ uvicorn
 python-multipart
 marker-pdf[full]
 torch              # Required for Marker's AI models
+docling_surya
