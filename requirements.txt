@@ -16,7 +16,7 @@ numpy
 pandas
 tabulate
 
-marker-pdf[full]
+marker-pdf
 
 docling
 docling-surya
