@@ -20,3 +20,5 @@ marker-pdf[full]
 
 docling
 docling-surya
+
+gunicorn

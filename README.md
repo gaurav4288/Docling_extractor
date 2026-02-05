@@ -57,6 +57,40 @@ docker build -t marker-convert .
 docker run -p 8000:8000 marker-convert
 ```
 
+## Deploying to Render (production-ready) ✅
+
+This project is ready to run on Render as a **Web Service**. Key points:
+
+- A `Procfile` has been added that tells Render to run `gunicorn` with `uvicorn` workers and bind to `$PORT`:
+
+```text
+web: gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:$PORT --workers 2
+```
+
+- The app also starts with a `PORT` environment variable when run directly (so Render's `$PORT` will be honored).
+- Make sure `gunicorn` is in `requirements.txt` (already added).
+
+Render setup steps:
+
+1. Create a new **Web Service** in the Render dashboard and connect your repo.
+2. Set the **Build Command** (optional): `pip install -r requirements.txt`
+3. Set the **Start Command** (if not using the `Procfile`):
+
+```bash
+gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:$PORT --workers 2
+```
+
+4. Deploy. Render will set a `$PORT` for you — the app must bind to that port.
+
+Local test with the same production command:
+
+```bash
+# Runs a production-like server locally on port 8000
+gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000 --workers 2
+```
+
+> ⚠️ For heavy workloads, increase `--workers` or add a queued worker process for conversions.
+
 ## Notes
 
 - Supported file types: PDF, PNG, JPG/JPEG, TIFF, DOCX
