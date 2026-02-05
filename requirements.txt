@@ -1,6 +1,22 @@
-fastapi
-uvicorn
+# Core web framework
+fastapi[standard]
+uvicorn[standard]
 python-multipart
+
+# Image / OCR / PDF processing
+easyocr
+pillow
+pdfminer.six
+pdfplumber
+pdf2image
+
+pi-heif
+# Data
+numpy
+pandas
+tabulate
+
 marker-pdf[full]
-torch              # Required for Marker's AI models
-docling_surya
+
+docling
+docling-surya
