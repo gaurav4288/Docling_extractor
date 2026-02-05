@@ -1,61 +1,73 @@
-import shutil
-import os
+from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, HTTPException, File, BackgroundTasks
-from fastapi.responses import Response
-from app.core.config import settings
-from app.services.processing import processor
+from io import BytesIO
+import logging
+
+from app.services.marker import MarkerProcessor
+from app.services.pdfplumber import FormProcessor
+from app.services.docling import DoclingService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-def cleanup_file(path: str):
-    """Background task to remove temp file after response is sent."""
-    try:
-        os.remove(path)
-    except Exception:
-        pass
+# Ensure temp directory exists for Windows
+TEMP_DIR = Path("C:/temp")
+TEMP_DIR.mkdir(exist_ok=True)
 
-@router.post("/convert", summary="Convert PDF/Docx to clean Markdown")
-async def convert_document(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...)
+
+@router.post("/convert")
+async def convert(
+    file: UploadFile = File(...),
+    service: str = "marker",
 ):
-    # 1. Validation
-    file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in settings.ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Invalid file type. Allowed: {settings.ALLOWED_EXTENSIONS}"
-        )
+    """Convert an uploaded file using the selected backend service.
 
-    # 2. Save Upload Temporarily
-    temp_file_path = Path(settings.UPLOAD_DIR) / file.filename
+    service: one of ['marker', 'pdfplumber', 'docling']
+    """
+    # Save uploaded file to disk
+    input_path = TEMP_DIR / file.filename
+    with input_path.open("wb") as buffer:
+        buffer.write(await file.read())
+
     try:
-        with open(temp_file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        if service == "marker":
+            processor = MarkerProcessor()
+            markdown = processor.process_file(
+                input_path,
+            )
+    
+        elif service == "pdfplumber":
+            processor = FormProcessor()
+            markdown = processor.process_file(input_path)
+        elif service == "docling":
+            processor = DoclingService()
+            result = processor.process_file(
+                input_path,
+            )
+            if isinstance(result, dict) and "markdown" in result:
+                markdown = result["markdown"]
+            else:
+                markdown = result
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Unknown service. Choose marker, unstructured, pdfplumber, or docling",
+            )
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Could not save uploaded file.")
-
-    # 3. Process with Docling (Blocking call wrapped in try/except)
-    try:
-        # Note: Docling is CPU intensive. In a massive scale app, 
-        # you might run this in a Celery worker. For a service, this is fine.
-        clean_text = processor.process_file(temp_file_path)
-        
-        # 4. Prepare Output Filename
-        output_filename = f"{Path(file.filename).stem}_processed.md"
-
-        # 5. Queue Cleanup
-        background_tasks.add_task(cleanup_file, str(temp_file_path))
-
-        # 6. Return as downloadable file
-        return Response(
-            content=clean_text,
-            media_type="text/markdown",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"}
-        )
-
-    except Exception as e:
-        # Ensure cleanup happens even on error
-        cleanup_file(str(temp_file_path))
+        logger.exception("Conversion failed")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Clean up temp file even if conversion fails
+        if input_path.exists():
+            input_path.unlink()
+
+    # Stream Response
+    md_file = BytesIO(str(markdown).encode("utf-8"))
+    return StreamingResponse(
+        md_file,
+        media_type="text/markdown",
+        headers={"Content-Disposition": f"attachment; filename={file.filename}.md"},
+    )
