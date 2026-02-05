@@ -12,6 +12,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+@router.get("/health", include_in_schema=False)
+async def health():
+    """Health check endpoint for load balancers / probes"""
+    return {"status": "ok"}
+
 # Ensure temp directory exists for Windows
 TEMP_DIR = Path("C:/temp")
 TEMP_DIR.mkdir(exist_ok=True)
