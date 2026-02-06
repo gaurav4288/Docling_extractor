@@ -22,4 +22,6 @@ marker-pdf
 docling
 docling-surya
 
-gunicorn
+# Pydantic settings required for configuration
+pydantic
+pydantic-settings

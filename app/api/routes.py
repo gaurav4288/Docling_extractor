@@ -9,14 +9,25 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
 @router.get("/health", include_in_schema=False)
 async def health():
     """Health check endpoint for load balancers / probes"""
     return {"status": "ok"}
 
-# Ensure temp directory exists for Windows
-TEMP_DIR = Path("C:/temp")
-TEMP_DIR.mkdir(exist_ok=True)
+
+import os
+import tempfile
+import asyncio
+from uuid import uuid4
+from app.core.config import settings
+
+# Use a cross-platform temp directory. Prefer $TEMP_DIR env var, then configured UPLOAD_DIR, then system temp.
+TEMP_DIR = Path(
+    os.environ.get("TEMP_DIR", settings.UPLOAD_DIR or tempfile.gettempdir())
+)
+TEMP_DIR = Path(TEMP_DIR)
+TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @router.post("/convert")
@@ -32,25 +43,25 @@ async def convert(
     from app.services.marker import MarkerProcessor
     from app.services.pdfplumber import FormProcessor
     from app.services.docling import DoclingService
-    input_path = TEMP_DIR / file.filename
+
+    # Sanitize filename and add unique prefix to avoid collisions and directory traversal
+    safe_name = Path(file.filename).name
+    input_path = TEMP_DIR / f"{uuid4().hex}_{safe_name}"
     with input_path.open("wb") as buffer:
         buffer.write(await file.read())
 
     try:
         if service == "marker":
             processor = MarkerProcessor()
-            markdown = processor.process_file(
-                input_path,
-            )
-    
+            # Processor is CPU / IO bound — run in a thread to avoid blocking the event loop
+            markdown = await asyncio.to_thread(processor.process_file, input_path)
+
         elif service == "pdfplumber":
             processor = FormProcessor()
-            markdown = processor.process_file(input_path)
+            markdown = await asyncio.to_thread(processor.process_file, input_path)
         elif service == "docling":
             processor = DoclingService()
-            result = processor.process_file(
-                input_path,
-            )
+            result = await asyncio.to_thread(processor.process_file, input_path)
             if isinstance(result, dict) and "markdown" in result:
                 markdown = result["markdown"]
             else:
@@ -58,7 +69,7 @@ async def convert(
         else:
             raise HTTPException(
                 status_code=400,
-                detail="Unknown service. Choose marker, unstructured, pdfplumber, or docling",
+                detail="Unknown service. Choose marker, pdfplumber, or docling",
             )
 
     except Exception as e:
